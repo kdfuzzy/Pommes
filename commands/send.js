@@ -1,8 +1,8 @@
 const { SlashCommandBuilder, ChannelType, PermissionFlagsBits } = require("discord.js")
 
-const LOG_CHANNEL = "1480954471868530769"
-const HIGH_RANK = "1480954571844092155"
-const LOW_RANK = "1480954537484222607"
+const LOG_CHANNEL = "1480983772655652874"
+const HIGH_RANK = "1480969630452285450"
+const LOW_RANK = "1480969586215223377"
 
 module.exports = {
 
