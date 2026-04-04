@@ -17,19 +17,20 @@ module.exports = {
 
         try {
             await member.ban({ reason });
+
             const embed = new EmbedBuilder()
                 .setTitle("User Banned")
                 .setColor("Red")
                 .addFields(
                     { name: "User", value: `${user.tag}`, inline: true },
                     { name: "Moderator", value: `${interaction.user.tag}`, inline: true },
-                    { name: "Reason", value: reason, inline: false }
+                    { name: "Reason", value: reason }
                 )
                 .setTimestamp();
 
             await interaction.reply({ embeds: [embed] });
 
-            // ===== Optional: send to logs channel =====
+            // Optional logs
             const logChannel = interaction.guild.channels.cache.get("1489787500632211547");
             if (logChannel) logChannel.send({ embeds: [embed] });
         } catch (err) {
