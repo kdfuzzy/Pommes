@@ -1,15 +1,10 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
-const web3 = require("@solana/web3.js");
-
-// shared storage
-const wallets = new Map();
+const { createChallenge, wallets } = require("../utils/walletStore");
 
 module.exports = {
-    wallets,
-
     data: new SlashCommandBuilder()
         .setName("addwallet")
-        .setDescription("Link or update your Solana wallet")
+        .setDescription("Link your Solana wallet")
         .addStringOption(option =>
             option.setName("address")
                 .setDescription("Your Solana wallet address")
@@ -17,32 +12,21 @@ module.exports = {
         ),
 
     async execute(interaction) {
-        await interaction.deferReply({ ephemeral: true });
-
         const address = interaction.options.getString("address");
 
-        // ✅ Validate Solana address
-        try {
-            new web3.PublicKey(address);
-        } catch {
-            return interaction.editReply("❌ Invalid Solana wallet address.");
-        }
-
-        const alreadyHad = wallets.has(interaction.user.id);
-
-        // Save/update wallet
-        wallets.set(interaction.user.id, address);
+        // Generate challenge
+        const challenge = createChallenge(interaction.user.id, address);
 
         const embed = new EmbedBuilder()
-            .setTitle(alreadyHad ? "🔄 Wallet Updated" : "🔗 Wallet Linked")
-            .setColor("Green")
-            .addFields(
-                { name: "User", value: interaction.user.tag, inline: true },
-                { name: "Wallet", value: `\`${address}\`` }
+            .setTitle("🔗 Wallet Linking")
+            .setDescription(
+                `Your wallet **${address}** has been linked.\n` +
+                `To verify ownership, sign this message in Phantom:\n\n\`${challenge}\``
             )
-            .setFooter({ text: "⚠️ Ownership not verified yet" })
+            .setColor("Yellow")
+            .setFooter({ text: "Use /verifywallet with the signed message" })
             .setTimestamp();
 
-        await interaction.editReply({ embeds: [embed] });
+        await interaction.reply({ embeds: [embed], ephemeral: true });
     }
 };
