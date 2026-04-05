@@ -18,21 +18,23 @@ function addBalance(userId, amount) {
     const db = getDB();
 
     if (!db[userId]) {
-        db[userId] = { balance: 0 };
+        db[userId] = {};
     }
 
-    db[userId].balance += amount;
+    db[userId].balance = (db[userId].balance || 0) + amount;
+
     saveDB(db);
 }
 
 function removeBalance(userId, amount) {
     const db = getDB();
 
-    if (!db[userId]) {
-        db[userId] = { balance: 0 };
-    }
+    if (!db[userId]) return;
 
     db[userId].balance -= amount;
+
+    if (db[userId].balance < 0) db[userId].balance = 0;
+
     saveDB(db);
 }
 
