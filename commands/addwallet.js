@@ -1,10 +1,11 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
-const { createChallenge } = require("../utils/walletStore");
+const crypto = require("crypto");
+const { addChallenge } = require("../utils/walletStore");
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("addwallet")
-        .setDescription("Link your Phantom wallet")
+        .setDescription("Start linking your Phantom wallet")
         .addStringOption(option =>
             option.setName("address")
                   .setDescription("Your Solana wallet address")
@@ -12,17 +13,25 @@ module.exports = {
         ),
 
     async execute(interaction) {
-        const address = interaction.options.getString("address");
-        const challenge = createChallenge(interaction.user.id, address);
+        const walletAddress = interaction.options.getString("address");
+
+        // basic check for Solana address length
+        if (!/^([1-9A-HJ-NP-Za-km-z]{32,44})$/.test(walletAddress)) {
+            return interaction.reply({ content: "❌ Invalid Solana wallet address.", ephemeral: true });
+        }
+
+        // Generate random challenge
+        const challenge = crypto.randomBytes(16).toString("hex");
+        addChallenge(interaction.user.id, challenge, walletAddress);
 
         const embed = new EmbedBuilder()
-            .setTitle("🔗 Wallet Linking")
+            .setTitle("📝 Verify Your Wallet")
             .setDescription(
-                `Wallet: \`${address}\`\n` +
-                `Sign this message in Phantom to verify:\n\`${challenge}\``
+                `To verify your wallet, sign the following message in Phantom and then use /verifywallet:\n\n` +
+                `\`${challenge}\``
             )
             .setColor("Yellow")
-            .setFooter({ text: "After signing, run /verifywallet <signature>" })
+            .setFooter({ text: "This proves you own the wallet address." })
             .setTimestamp();
 
         await interaction.reply({ embeds: [embed], ephemeral: true });
