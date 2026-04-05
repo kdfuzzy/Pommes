@@ -1,31 +1,27 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
+const { addWallet } = require("../utils/walletStore");
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('addwallet')
-        .setDescription('Link your Solana wallet')
+        .setName("addwallet")
+        .setDescription("Add your verified Solana wallet")
         .addStringOption(option =>
-            option.setName('address')
-                  .setDescription('Enter your wallet address')
-                  .setRequired(true)),
-    
-    async execute(interaction, client) {
-        const address = interaction.options.getString('address');
+            option.setName("address")
+                .setDescription("Your Solana wallet address")
+                .setRequired(true)
+        ),
 
-        // Basic validation
-        if (!/^([1-9A-HJ-NP-Za-km-z]{32,44})$/.test(address)) {
-            return interaction.reply({ content: '❌ Invalid wallet address.', ephemeral: true });
-        }
+    async execute(interaction) {
+        const address = interaction.options.getString("address");
 
-        // Save wallet in memory
-        client.wallets[interaction.user.id] = address;
+        addWallet(interaction.user.id, address);
 
         const embed = new EmbedBuilder()
-            .setTitle('Wallet Linked')
-            .setDescription(`✅ Your wallet has been linked!\n\nWallet: \`${address}\``)
-            .setColor('Green')
+            .setTitle("✅ Wallet Added")
+            .setDescription(`Wallet \`${address}\` has been successfully added and verified.`)
+            .setColor("Green")
             .setTimestamp();
 
-        await interaction.reply({ embeds: [embed], ephemeral: true });
+        await interaction.reply({ embeds: [embed], ephemeral: false });
     }
 };
