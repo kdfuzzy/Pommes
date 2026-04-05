@@ -29,10 +29,9 @@ for (const file of commandFiles) {
     const filePath = path.join(commandsPath, file);
     const command = require(filePath);
 
-    // ✅ THIS IS THE IMPORTANT FIX
     if ('data' in command && 'execute' in command) {
         client.commands.set(command.data.name, command);
-        commands.push(command.data.toJSON()); // 🔥 REQUIRED for SlashCommandBuilder
+        commands.push(command.data.toJSON());
     } else {
         console.log(`❌ Invalid command file: ${file}`);
     }
@@ -61,25 +60,88 @@ client.once('ready', () => {
     console.log(`✅ Logged in as ${client.user.tag}`);
 });
 
-// ===== HANDLE COMMANDS =====
+// ===== INTERACTIONS =====
 client.on('interactionCreate', async interaction => {
-    if (!interaction.isChatInputCommand()) return;
 
-    const command = client.commands.get(interaction.commandName);
+    // =====================
+    // SLASH COMMANDS
+    // =====================
+    if (interaction.isChatInputCommand()) {
+        const command = client.commands.get(interaction.commandName);
 
-    if (!command) {
-        return interaction.reply({ content: '❌ Command not found', ephemeral: true });
+        if (!command) {
+            return interaction.reply({ content: '❌ Command not found', ephemeral: true });
+        }
+
+        try {
+            await command.execute(interaction);
+        } catch (error) {
+            console.error(error);
+
+            if (interaction.replied || interaction.deferred) {
+                await interaction.followUp({ content: '❌ Error executing command', ephemeral: true });
+            } else {
+                await interaction.reply({ content: '❌ Error executing command', ephemeral: true });
+            }
+        }
     }
 
-    try {
-        await command.execute(interaction);
-    } catch (error) {
-        console.error(error);
+    // =====================
+    // BUTTON HANDLER (COINFLIP)
+    // =====================
+    if (interaction.isButton()) {
 
-        if (interaction.replied || interaction.deferred) {
-            await interaction.followUp({ content: '❌ Error executing command', ephemeral: true });
-        } else {
-            await interaction.reply({ content: '❌ Error executing command', ephemeral: true });
+        const parts = interaction.customId.split('_');
+        const action = parts[0];
+
+        if (action !== 'accept' && action !== 'decline') return;
+
+        const userId = parts[1];
+        const opponentId = parts[2];
+        const amount = parts[3];
+
+        // Only opponent can click
+        if (interaction.user.id !== opponentId) {
+            return interaction.reply({
+                content: '❌ This is not your challenge.',
+                ephemeral: true
+            });
+        }
+
+        if (action === 'decline') {
+            return interaction.update({
+                content: '❌ Coinflip declined.',
+                components: []
+            });
+        }
+
+        if (action === 'accept') {
+            const bet = parseInt(amount);
+
+            const { getBalance, removeBalance, addBalance } = require('./utils/economy');
+
+            const userBal = getBalance(userId);
+            const oppBal = getBalance(opponentId);
+
+            if (userBal < bet || oppBal < bet) {
+                return interaction.update({
+                    content: '❌ One of you no longer has enough money.',
+                    components: []
+                });
+            }
+
+            const winnerId = Math.random() < 0.5 ? userId : opponentId;
+            const loserId = winnerId === userId ? opponentId : userId;
+
+            removeBalance(loserId, bet);
+            addBalance(winnerId, bet);
+
+            const winner = await client.users.fetch(winnerId);
+
+            return interaction.update({
+                content: `🪙 Coinflip result!\n🏆 Winner: ${winner}\n💰 Won: ${bet}`,
+                components: []
+            });
         }
     }
 });
