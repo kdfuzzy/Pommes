@@ -5,7 +5,7 @@ const {
     ButtonStyle 
 } = require('discord.js');
 
-const { getBalance, removeBalance, addBalance } = require('../utils/economy');
+const { getBalance } = require('../utils/economy');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -14,11 +14,20 @@ module.exports = {
         .addUserOption(opt =>
             opt.setName('opponent').setDescription('Opponent').setRequired(true))
         .addIntegerOption(opt =>
-            opt.setName('amount').setDescription('Bet amount').setRequired(true)),
+            opt.setName('amount').setDescription('Bet amount').setRequired(true))
+        .addStringOption(opt =>
+            opt.setName('side')
+                .setDescription('Pick heads or tails')
+                .setRequired(true)
+                .addChoices(
+                    { name: 'Heads', value: 'heads' },
+                    { name: 'Tails', value: 'tails' }
+                )),
 
     async execute(interaction) {
         const opponent = interaction.options.getUser('opponent');
         const amount = interaction.options.getInteger('amount');
+        const side = interaction.options.getString('side');
         const user = interaction.user;
 
         if (opponent.bot) {
@@ -44,10 +53,9 @@ module.exports = {
             return interaction.reply({ content: '❌ Opponent doesn’t have enough money.', ephemeral: true });
         }
 
-        // 🎮 BUTTONS
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
-                .setCustomId(`accept_${user.id}_${opponent.id}_${amount}`)
+                .setCustomId(`accept_${user.id}_${opponent.id}_${amount}_${side}`)
                 .setLabel('Accept')
                 .setStyle(ButtonStyle.Success),
 
@@ -58,7 +66,7 @@ module.exports = {
         );
 
         await interaction.reply({
-            content: `🪙 ${opponent}, you’ve been challenged by ${user} for **${amount}**!`,
+            content: `🪙 ${opponent}, ${user} challenged you for **${amount}**!\n🎯 They chose **${side.toUpperCase()}**`,
             components: [row]
         });
     }
