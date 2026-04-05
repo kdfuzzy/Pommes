@@ -4,27 +4,27 @@ const { getWallet } = require("../utils/walletStore");
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("wallet")
-        .setDescription("View a user's wallet info")
+        .setDescription("View a user's linked wallet")
         .addUserOption(option =>
             option.setName("user")
-                  .setDescription("User to view wallet")
+                  .setDescription("The user to check")
                   .setRequired(false)
         ),
 
     async execute(interaction) {
-        const user = interaction.options.getUser("user") || interaction.user;
-        const wallet = getWallet(user.id);
+        const target = interaction.options.getUser("user") || interaction.user;
+        const wallet = getWallet(target.id);
 
         if (!wallet) {
-            return interaction.reply({ content: `❌ ${user.username} has not linked a wallet.`, ephemeral: false });
+            return interaction.reply({ content: `❌ ${target.username} has no linked wallet.`, ephemeral: true });
         }
 
         const embed = new EmbedBuilder()
-            .setTitle(`${user.username}'s Wallet`)
-            .setDescription(`Address: \`${wallet.address}\`\nVerified: ${wallet.verified ? "✅ Yes" : "❌ No"}`)
-            .setColor(wallet.verified ? "Green" : "Yellow")
+            .setTitle(`💰 Wallet of ${target.username}`)
+            .setDescription(`\`${wallet.address}\`\nVerified: ${wallet.verified ? "✅" : "❌"}`)
+            .setColor("Blue")
             .setTimestamp();
 
-        await interaction.reply({ embeds: [embed], ephemeral: false });
+        await interaction.reply({ embeds: [embed] });
     }
 };
