@@ -99,6 +99,7 @@ client.on('interactionCreate', async interaction => {
         const userId = parts[1];
         const opponentId = parts[2];
         const amount = parts[3];
+        const chosenSide = parts[4]; // heads/tails
 
         // Only opponent can click
         if (interaction.user.id !== opponentId) {
@@ -108,6 +109,7 @@ client.on('interactionCreate', async interaction => {
             });
         }
 
+        // Decline
         if (action === 'decline') {
             return interaction.update({
                 content: '❌ Coinflip declined.',
@@ -115,6 +117,7 @@ client.on('interactionCreate', async interaction => {
             });
         }
 
+        // Accept
         if (action === 'accept') {
             const bet = parseInt(amount);
 
@@ -130,7 +133,19 @@ client.on('interactionCreate', async interaction => {
                 });
             }
 
-            const winnerId = Math.random() < 0.5 ? userId : opponentId;
+            // 🎲 Flip coin
+            const result = Math.random() < 0.5 ? 'heads' : 'tails';
+
+            const opponentSide = chosenSide === 'heads' ? 'tails' : 'heads';
+
+            let winnerId;
+
+            if (result === chosenSide) {
+                winnerId = userId;
+            } else {
+                winnerId = opponentId;
+            }
+
             const loserId = winnerId === userId ? opponentId : userId;
 
             removeBalance(loserId, bet);
@@ -139,7 +154,15 @@ client.on('interactionCreate', async interaction => {
             const winner = await client.users.fetch(winnerId);
 
             return interaction.update({
-                content: `🪙 Coinflip result!\n🏆 Winner: ${winner}\n💰 Won: ${bet}`,
+                content:
+`🪙 **Coinflip Result**
+🎯 Result: **${result.toUpperCase()}**
+
+👤 Challenger: ${chosenSide.toUpperCase()}
+👤 Opponent: ${opponentSide.toUpperCase()}
+
+🏆 Winner: ${winner}
+💰 Won: ${bet}`,
                 components: []
             });
         }
