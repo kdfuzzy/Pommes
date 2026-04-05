@@ -1,45 +1,85 @@
 const fs = require('fs');
-const DB_FILE = './data.json';
+const path = require('path');
 
-function getDB() {
-    return JSON.parse(fs.readFileSync(DB_FILE));
+const filePath = path.join(__dirname, '../data.json');
+
+function getData() {
+    if (!fs.existsSync(filePath)) {
+        fs.writeFileSync(filePath, JSON.stringify({}));
+    }
+    return JSON.parse(fs.readFileSync(filePath));
 }
 
-function saveDB(data) {
-    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+function saveData(data) {
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
 }
 
+// 💰 BALANCE
 function getBalance(userId) {
-    const db = getDB();
-    return db[userId]?.balance || 0;
+    const data = getData();
+    return data[userId]?.balance || 0;
 }
 
 function addBalance(userId, amount) {
-    const db = getDB();
+    const data = getData();
 
-    if (!db[userId]) {
-        db[userId] = {};
+    if (!data[userId]) {
+        data[userId] = { balance: 0, stats: { wins: 0, losses: 0 } };
     }
 
-    db[userId].balance = (db[userId].balance || 0) + amount;
-
-    saveDB(db);
+    data[userId].balance += amount;
+    saveData(data);
 }
 
 function removeBalance(userId, amount) {
-    const db = getDB();
+    const data = getData();
 
-    if (!db[userId]) return;
+    if (!data[userId]) {
+        data[userId] = { balance: 0, stats: { wins: 0, losses: 0 } };
+    }
 
-    db[userId].balance -= amount;
+    data[userId].balance -= amount;
+    saveData(data);
+}
 
-    if (db[userId].balance < 0) db[userId].balance = 0;
+// 📊 STATS
+function addWin(userId) {
+    const data = getData();
 
-    saveDB(db);
+    if (!data[userId]) {
+        data[userId] = { balance: 0, stats: { wins: 0, losses: 0 } };
+    }
+
+    data[userId].stats.wins += 1;
+    saveData(data);
+}
+
+function addLoss(userId) {
+    const data = getData();
+
+    if (!data[userId]) {
+        data[userId] = { balance: 0, stats: { wins: 0, losses: 0 } };
+    }
+
+    data[userId].stats.losses += 1;
+    saveData(data);
+}
+
+function getStats(userId) {
+    const data = getData();
+    return data[userId]?.stats || { wins: 0, losses: 0 };
+}
+
+function getAllUsers() {
+    return getData();
 }
 
 module.exports = {
     getBalance,
     addBalance,
-    removeBalance
+    removeBalance,
+    addWin,
+    addLoss,
+    getStats,
+    getAllUsers
 };
