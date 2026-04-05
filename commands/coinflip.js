@@ -2,10 +2,14 @@ const {
     SlashCommandBuilder, 
     ActionRowBuilder, 
     ButtonBuilder, 
-    ButtonStyle 
+    ButtonStyle,
+    EmbedBuilder 
 } = require('discord.js');
 
 const { getBalance } = require('../utils/economy');
+
+const cooldowns = new Map();
+const COOLDOWN_TIME = 10 * 1000; // 10 seconds
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -25,48 +29,67 @@ module.exports = {
                 )),
 
     async execute(interaction) {
+        const now = Date.now();
+        const userId = interaction.user.id;
+
+        // ⏱️ COOLDOWN
+        if (cooldowns.has(userId)) {
+            const expire = cooldowns.get(userId) + COOLDOWN_TIME;
+
+            if (now < expire) {
+                const remaining = ((expire - now) / 1000).toFixed(1);
+                return interaction.reply({
+                    content: `⏳ Wait ${remaining}s before using this again.`,
+                    ephemeral: true
+                });
+            }
+        }
+
+        cooldowns.set(userId, now);
+
         const opponent = interaction.options.getUser('opponent');
         const amount = interaction.options.getInteger('amount');
         const side = interaction.options.getString('side');
-        const user = interaction.user;
 
-        if (opponent.bot) {
-            return interaction.reply({ content: '❌ You cannot challenge bots.', ephemeral: true });
-        }
-
-        if (opponent.id === user.id) {
-            return interaction.reply({ content: '❌ You cannot challenge yourself.', ephemeral: true });
+        if (opponent.bot || opponent.id === interaction.user.id) {
+            return interaction.reply({ content: '❌ Invalid opponent.', ephemeral: true });
         }
 
         if (amount <= 0) {
             return interaction.reply({ content: '❌ Invalid amount.', ephemeral: true });
         }
 
-        const userBal = getBalance(user.id);
+        const userBal = getBalance(interaction.user.id);
         const oppBal = getBalance(opponent.id);
 
-        if (userBal < amount) {
-            return interaction.reply({ content: '❌ You don’t have enough money.', ephemeral: true });
+        if (userBal < amount || oppBal < amount) {
+            return interaction.reply({ content: '❌ One of you doesn’t have enough money.', ephemeral: true });
         }
 
-        if (oppBal < amount) {
-            return interaction.reply({ content: '❌ Opponent doesn’t have enough money.', ephemeral: true });
-        }
+        // 🎮 EMBED
+        const embed = new EmbedBuilder()
+            .setTitle('🪙 Coinflip Challenge')
+            .setDescription(
+                `**${interaction.user.username}** vs **${opponent.username}**\n\n` +
+                `💰 Bet: **${amount}**\n` +
+                `🎯 Choice: **${side.toUpperCase()}**`
+            )
+            .setColor('Gold');
 
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
-                .setCustomId(`accept_${user.id}_${opponent.id}_${amount}_${side}`)
+                .setCustomId(`accept_${interaction.user.id}_${opponent.id}_${amount}_${side}`)
                 .setLabel('Accept')
                 .setStyle(ButtonStyle.Success),
 
             new ButtonBuilder()
-                .setCustomId(`decline_${user.id}_${opponent.id}`)
+                .setCustomId(`decline_${interaction.user.id}_${opponent.id}`)
                 .setLabel('Decline')
                 .setStyle(ButtonStyle.Danger)
         );
 
         await interaction.reply({
-            content: `🪙 ${opponent}, ${user} challenged you for **${amount}**!\n🎯 They chose **${side.toUpperCase()}**`,
+            embeds: [embed],
             components: [row]
         });
     }
