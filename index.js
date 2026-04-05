@@ -1,6 +1,7 @@
 const { 
     Client, 
     GatewayIntentBits, 
+    Collection, 
     REST, 
     Routes 
 } = require('discord.js');
@@ -8,19 +9,16 @@ const {
 const fs = require('fs');
 const path = require('path');
 
-// ===== CONFIG =====
-const TOKEN = process.env.TOKEN;
-const CLIENT_ID = process.env.CLIENT_ID;
-const GUILD_ID = process.env.GUILD_ID;
-
-// ===== CLIENT =====
 const client = new Client({
-    intents: [GatewayIntentBits.Guilds]
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages
+    ]
 });
 
-client.commands = new Map();
+client.commands = new Collection();
 
-// ===== LOAD COMMANDS =====
+// 🔥 LOAD COMMANDS FROM /commands
 const commands = [];
 const commandsPath = path.join(__dirname, 'commands');
 const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
@@ -33,44 +31,40 @@ for (const file of commandFiles) {
         client.commands.set(command.data.name, command);
         commands.push(command.data.toJSON());
     } else {
-        console.log(`❌ Invalid command file: ${file}`);
+        console.log(`[WARNING] Command at ${filePath} is missing "data" or "execute".`);
     }
 }
 
-// ===== REGISTER COMMANDS =====
-const rest = new REST({ version: '10' }).setToken(TOKEN);
+// 🚀 REGISTER SLASH COMMANDS AUTOMATICALLY
+client.once('ready', async () => {
+    console.log(`✅ Logged in as ${client.user.tag}`);
 
-(async () => {
+    const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+
     try {
-        console.log('🔄 Registering slash commands...');
+        console.log('🔄 Refreshing slash commands...');
 
         await rest.put(
-            Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
+            Routes.applicationCommands(client.user.id), // GLOBAL COMMANDS
             { body: commands }
         );
 
-        console.log('✅ Slash commands registered');
+        console.log('✅ Slash commands registered.');
     } catch (error) {
         console.error(error);
     }
-})();
-
-// ===== READY =====
-client.once('ready', () => {
-    console.log(`✅ Logged in as ${client.user.tag}`);
 });
 
-// ===== INTERACTIONS =====
-client.on('interactionCreate', async interaction => {
+// 🎮 INTERACTIONS (COMMANDS + BUTTONS)
+client.on('interactionCreate', async (interaction) => {
 
-    // =====================
-    // SLASH COMMANDS
-    // =====================
+    // ✅ SLASH COMMANDS
     if (interaction.isChatInputCommand()) {
         const command = client.commands.get(interaction.commandName);
 
         if (!command) {
-            return interaction.reply({ content: '❌ Command not found', ephemeral: true });
+            console.error(`❌ No command matching ${interaction.commandName}`);
+            return;
         }
 
         try {
@@ -79,16 +73,14 @@ client.on('interactionCreate', async interaction => {
             console.error(error);
 
             if (interaction.replied || interaction.deferred) {
-                await interaction.followUp({ content: '❌ Error executing command', ephemeral: true });
+                await interaction.followUp({ content: '❌ Error executing command.', ephemeral: true });
             } else {
-                await interaction.reply({ content: '❌ Error executing command', ephemeral: true });
+                await interaction.reply({ content: '❌ Error executing command.', ephemeral: true });
             }
         }
     }
 
-    // =====================
-    // BUTTON HANDLER (COINFLIP)
-    // =====================
+    // 🎲 BUTTON HANDLER (COINFLIP)
     if (interaction.isButton()) {
 
         const parts = interaction.customId.split('_');
@@ -99,9 +91,8 @@ client.on('interactionCreate', async interaction => {
         const userId = parts[1];
         const opponentId = parts[2];
         const amount = parts[3];
-        const chosenSide = parts[4]; // heads/tails
+        const chosenSide = parts[4];
 
-        // Only opponent can click
         if (interaction.user.id !== opponentId) {
             return interaction.reply({
                 content: '❌ This is not your challenge.',
@@ -109,15 +100,14 @@ client.on('interactionCreate', async interaction => {
             });
         }
 
-        // Decline
         if (action === 'decline') {
             return interaction.update({
                 content: '❌ Coinflip declined.',
+                embeds: [],
                 components: []
             });
         }
 
-        // Accept
         if (action === 'accept') {
             const bet = parseInt(amount);
 
@@ -133,41 +123,64 @@ client.on('interactionCreate', async interaction => {
                 });
             }
 
-            // 🎲 Flip coin
-            const result = Math.random() < 0.5 ? 'heads' : 'tails';
+            // 🎬 ANIMATION
+            await interaction.update({
+                embeds: [{
+                    title: '🪙 Flipping...',
+                    description: 'The coin is spinning...',
+                    color: 0xFFFF00
+                }],
+                components: []
+            });
 
+            await new Promise(r => setTimeout(r, 2000));
+
+            // 🎲 RESULT
+            const result = Math.random() < 0.5 ? 'heads' : 'tails';
             const opponentSide = chosenSide === 'heads' ? 'tails' : 'heads';
 
-            let winnerId;
-
-            if (result === chosenSide) {
-                winnerId = userId;
-            } else {
-                winnerId = opponentId;
-            }
-
-            const loserId = winnerId === userId ? opponentId : userId;
+            let winnerId = result === chosenSide ? userId : opponentId;
+            let loserId = winnerId === userId ? opponentId : userId;
 
             removeBalance(loserId, bet);
             addBalance(winnerId, bet);
 
             const winner = await client.users.fetch(winnerId);
+            const challenger = await client.users.fetch(userId);
+            const opponent = await client.users.fetch(opponentId);
 
-            return interaction.update({
-                content:
-`🪙 **Coinflip Result**
-🎯 Result: **${result.toUpperCase()}**
+            const resultEmbed = {
+                title: '🪙 Coinflip Result',
+                description:
+                    `🎯 Result: **${result.toUpperCase()}**\n\n` +
+                    `👤 ${challenger.username}: ${chosenSide.toUpperCase()}\n` +
+                    `👤 ${opponent.username}: ${opponentSide.toUpperCase()}\n\n` +
+                    `🏆 Winner: **${winner.username}**\n💰 Won: **${bet}**`,
+                color: 0x00FF00
+            };
 
-👤 Challenger: ${chosenSide.toUpperCase()}
-👤 Opponent: ${opponentSide.toUpperCase()}
-
-🏆 Winner: ${winner}
-💰 Won: ${bet}`,
-                components: []
+            await interaction.editReply({
+                embeds: [resultEmbed]
             });
+
+            // 📜 LOG CHANNEL
+            const logChannel = client.channels.cache.get('1490466866915836095');
+
+            if (logChannel) {
+                logChannel.send({
+                    embeds: [{
+                        title: '📜 Coinflip Log',
+                        description:
+                            `👤 ${challenger.username} vs ${opponent.username}\n` +
+                            `💰 Bet: ${bet}\n` +
+                            `🎯 Result: ${result}\n` +
+                            `🏆 Winner: ${winner.username}`,
+                        color: 0x5865F2
+                    }]
+                });
+            }
         }
     }
 });
 
-// ===== LOGIN =====
-client.login(TOKEN);
+client.login(process.env.TOKEN);
