@@ -1,37 +1,29 @@
-const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
-const crypto = require("crypto");
-const { addChallenge } = require("../utils/walletStore");
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName("addwallet")
-        .setDescription("Start linking your Phantom wallet")
+        .setName('addwallet')
+        .setDescription('Link your Solana wallet')
         .addStringOption(option =>
-            option.setName("address")
-                  .setDescription("Your Solana wallet address")
-                  .setRequired(true)
-        ),
+            option.setName('address')
+                  .setDescription('Enter your wallet address')
+                  .setRequired(true)),
+    
+    async execute(interaction, client) {
+        const address = interaction.options.getString('address');
 
-    async execute(interaction) {
-        const walletAddress = interaction.options.getString("address");
-
-        // basic check for Solana address length
-        if (!/^([1-9A-HJ-NP-Za-km-z]{32,44})$/.test(walletAddress)) {
-            return interaction.reply({ content: "❌ Invalid Solana wallet address.", ephemeral: true });
+        // Basic validation
+        if (!/^([1-9A-HJ-NP-Za-km-z]{32,44})$/.test(address)) {
+            return interaction.reply({ content: '❌ Invalid wallet address.', ephemeral: true });
         }
 
-        // Generate random challenge
-        const challenge = crypto.randomBytes(16).toString("hex");
-        addChallenge(interaction.user.id, challenge, walletAddress);
+        // Save wallet in memory
+        client.wallets[interaction.user.id] = address;
 
         const embed = new EmbedBuilder()
-            .setTitle("📝 Verify Your Wallet")
-            .setDescription(
-                `To verify your wallet, sign the following message in Phantom and then use /verifywallet:\n\n` +
-                `\`${challenge}\``
-            )
-            .setColor("Yellow")
-            .setFooter({ text: "This proves you own the wallet address." })
+            .setTitle('Wallet Linked')
+            .setDescription(`✅ Your wallet has been linked!\n\nWallet: \`${address}\``)
+            .setColor('Green')
             .setTimestamp();
 
         await interaction.reply({ embeds: [embed], ephemeral: true });
