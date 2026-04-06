@@ -1,18 +1,29 @@
-const { 
-    Client, 
-    GatewayIntentBits, 
-    Collection, 
-    REST, 
-    Routes 
+const {
+    Client,
+    GatewayIntentBits,
+    Collection,
+    REST,
+    Routes
 } = require('discord.js');
 
 const fs = require('fs');
 const path = require('path');
 
+// 💎 Economy
+const {
+    getBalance,
+    removeBalance,
+    addBalance,
+    addWin,
+    addLoss,
+    formatSol
+} = require('./utils/economy');
+
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent
     ]
 });
 
@@ -29,9 +40,7 @@ if (!fs.existsSync(commandsPath)) {
 const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
 
 for (const file of commandFiles) {
-    const filePath = path.join(commandsPath, file);
-    const command = require(filePath);
-
+    const command = require(`./commands/${file}`);
     if (command.data && command.execute) {
         client.commands.set(command.data.name, command);
         commands.push(command.data.toJSON());
@@ -44,15 +53,39 @@ client.once('ready', async () => {
 
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
-    try {
-        console.log('🔄 Registering slash commands...');
-        await rest.put(
-            Routes.applicationCommands(client.user.id),
-            { body: commands }
-        );
-        console.log('✅ Commands registered.');
-    } catch (err) {
-        console.error(err);
+    await rest.put(
+        Routes.applicationCommands(client.user.id),
+        { body: commands }
+    );
+
+    console.log('✅ Slash commands registered');
+});
+
+// 💬 PREFIX COMMANDS (.tip)
+client.on('messageCreate', async (message) => {
+    if (message.author.bot) return;
+    if (!message.content.startsWith('.')) return;
+
+    const args = message.content.slice(1).split(/ +/);
+    const cmd = args.shift().toLowerCase();
+
+    if (cmd === 'tip') {
+        const user = message.mentions.users.first();
+        const amount = parseFloat(args[1]);
+
+        if (!user) return message.reply('❌ Mention a user.');
+        if (!amount || amount <= 0) return message.reply('❌ Invalid amount.');
+
+        const bal = getBalance(message.author.id);
+
+        if (bal < amount) {
+            return message.reply(`❌ You only have ${formatSol(bal)}`);
+        }
+
+        removeBalance(message.author.id, amount);
+        addBalance(user.id, amount);
+
+        message.reply(`💸 Sent ${formatSol(amount)} to ${user.username}`);
     }
 });
 
@@ -75,15 +108,11 @@ client.on('interactionCreate', async (interaction) => {
     // 🔘 BUTTONS
     if (interaction.isButton()) {
 
-        // =====================
-        // 🎫 TICKET SYSTEM
-        // =====================
-
         const supportRole = '1489800529365172434';
         const ticketCategory = '1489805003857330226';
         const transcriptChannelId = '1490475430095093845';
 
-        // CREATE
+        // 🎫 CREATE TICKET
         if (interaction.customId === 'create_ticket') {
 
             const existing = interaction.guild.channels.cache.find(
@@ -91,10 +120,7 @@ client.on('interactionCreate', async (interaction) => {
             );
 
             if (existing) {
-                return interaction.reply({
-                    content: '❌ You already have a ticket.',
-                    ephemeral: true
-                });
+                return interaction.reply({ content: '❌ You already have a ticket.', ephemeral: true });
             }
 
             const channel = await interaction.guild.channels.create({
@@ -129,15 +155,11 @@ client.on('interactionCreate', async (interaction) => {
                 components: [row]
             });
 
-            return interaction.reply({
-                content: `✅ Created: ${channel}`,
-                ephemeral: true
-            });
+            return interaction.reply({ content: `✅ Created: ${channel}`, ephemeral: true });
         }
 
         // CLAIM
         if (interaction.customId === 'claim_ticket') {
-
             if (!interaction.member.roles.cache.has(supportRole)) {
                 return interaction.reply({ content: '❌ No permission.', ephemeral: true });
             }
@@ -148,7 +170,6 @@ client.on('interactionCreate', async (interaction) => {
 
         // RENAME
         if (interaction.customId === 'rename_ticket') {
-
             if (!interaction.member.roles.cache.has(supportRole)) {
                 return interaction.reply({ content: '❌ No permission.', ephemeral: true });
             }
@@ -157,10 +178,11 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.reply({ content: '✏️ Renamed.', ephemeral: true });
         }
 
-        // CLOSE
+        // CLOSE + TRANSCRIPT
         if (interaction.customId === 'close_ticket') {
 
             const messages = await interaction.channel.messages.fetch({ limit: 100 });
+
             const transcript = messages
                 .map(m => `${m.author.tag}: ${m.content}`)
                 .reverse()
@@ -178,12 +200,12 @@ client.on('interactionCreate', async (interaction) => {
                 });
             }
 
-            await interaction.reply('🔒 Closing...');
+            await interaction.reply('🔒 Closing ticket...');
             setTimeout(() => interaction.channel.delete(), 3000);
         }
 
         // =====================
-        // 🪙 COINFLIP SYSTEM
+        // 🪙 COINFLIP (SOL)
         // =====================
 
         const parts = interaction.customId.split('_');
@@ -193,14 +215,11 @@ client.on('interactionCreate', async (interaction) => {
 
         const userId = parts[1];
         const opponentId = parts[2];
-        const amount = parts[3];
+        const amount = parseFloat(parts[3]);
         const chosenSide = parts[4];
 
         if (interaction.user.id !== opponentId) {
-            return interaction.reply({
-                content: '❌ Not your challenge.',
-                ephemeral: true
-            });
+            return interaction.reply({ content: '❌ Not your challenge.', ephemeral: true });
         }
 
         if (action === 'decline') {
@@ -213,30 +232,20 @@ client.on('interactionCreate', async (interaction) => {
 
         if (action === 'accept') {
 
-            const bet = parseInt(amount);
-
-            const { 
-                getBalance, 
-                removeBalance, 
-                addBalance,
-                addWin,
-                addLoss
-            } = require('./utils/economy');
-
             const userBal = getBalance(userId);
             const oppBal = getBalance(opponentId);
 
-            if (userBal < bet || oppBal < bet) {
+            if (userBal < amount || oppBal < amount) {
                 return interaction.update({
-                    content: '❌ Not enough money.',
+                    content: '❌ One of you doesn’t have enough SOL.',
                     components: []
                 });
             }
 
             await interaction.update({
                 embeds: [{
-                    title: '🪙 Flipping...',
-                    description: 'The coin is spinning...',
+                    title: '🪙 Flipping Coin...',
+                    description: `Bet: ${formatSol(amount)}`,
                     color: 0xFFFF00
                 }],
                 components: []
@@ -250,8 +259,8 @@ client.on('interactionCreate', async (interaction) => {
             let winnerId = result === chosenSide ? userId : opponentId;
             let loserId = winnerId === userId ? opponentId : userId;
 
-            removeBalance(loserId, bet);
-            addBalance(winnerId, bet);
+            removeBalance(loserId, amount);
+            addBalance(winnerId, amount);
 
             addWin(winnerId);
             addLoss(loserId);
@@ -262,29 +271,16 @@ client.on('interactionCreate', async (interaction) => {
 
             await interaction.editReply({
                 embeds: [{
-                    title: '🪙 Result',
+                    title: '🪙 Coinflip Result',
                     description:
                         `Result: **${result}**\n\n` +
                         `${challenger.username}: ${chosenSide}\n` +
                         `${opponent.username}: ${opponentSide}\n\n` +
+                        `💰 Pot: ${formatSol(amount)}\n` +
                         `🏆 Winner: ${winner.username}`,
                     color: 0x00FF00
                 }]
             });
-
-            const logChannel = client.channels.cache.get('1490466866915836095');
-
-            if (logChannel) {
-                logChannel.send({
-                    embeds: [{
-                        title: '📜 Coinflip Log',
-                        description:
-                            `${challenger.username} vs ${opponent.username}\n` +
-                            `Bet: ${bet}\nWinner: ${winner.username}`,
-                        color: 0x5865F2
-                    }]
-                });
-            }
         }
     }
 });
