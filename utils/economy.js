@@ -1,106 +1,136 @@
 const fs = require('fs');
 const path = require('path');
 
-const filePath = path.join(__dirname, '../data.json');
+const dataPath = path.join(__dirname, '../data/economy.json');
 
-// 📂 GET DATA
-function getData() {
-    if (!fs.existsSync(filePath)) {
-        fs.writeFileSync(filePath, JSON.stringify({}));
-    }
-    return JSON.parse(fs.readFileSync(filePath));
+// 📁 Ensure file exists
+if (!fs.existsSync(dataPath)) {
+    fs.mkdirSync(path.dirname(dataPath), { recursive: true });
+    fs.writeFileSync(dataPath, JSON.stringify({}, null, 2));
 }
 
-// 💾 SAVE DATA
+// 📥 Load data
+function loadData() {
+    return JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+}
+
+// 💾 Save data
 function saveData(data) {
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+    fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
 }
 
-// 🧱 ENSURE USER EXISTS
-function ensureUser(data, userId) {
-    if (!data[userId]) {
-        data[userId] = {
-            balance: 0,
-            stats: {
-                wins: 0,
-                losses: 0
-            },
-            wallet: null
-        };
-    }
-}
-
-// 💰 BALANCE
+// 💰 Get balance
 function getBalance(userId) {
-    const data = getData();
+    const data = loadData();
     return data[userId]?.balance || 0;
 }
 
+// ➕ Add money
 function addBalance(userId, amount) {
-    const data = getData();
-    ensureUser(data, userId);
+    const data = loadData();
+
+    if (!data[userId]) {
+        data[userId] = {
+            balance: 0,
+            wins: 0,
+            losses: 0
+        };
+    }
 
     data[userId].balance += amount;
+
     saveData(data);
 }
 
+// ➖ Remove money
 function removeBalance(userId, amount) {
-    const data = getData();
-    ensureUser(data, userId);
+    const data = loadData();
+
+    if (!data[userId]) {
+        data[userId] = {
+            balance: 0,
+            wins: 0,
+            losses: 0
+        };
+    }
 
     data[userId].balance -= amount;
+
+    if (data[userId].balance < 0) {
+        data[userId].balance = 0;
+    }
+
     saveData(data);
 }
 
-// 📊 STATS
+// ♻️ Reset money
+function resetBalance(userId) {
+    const data = loadData();
+
+    data[userId] = {
+        balance: 0,
+        wins: 0,
+        losses: 0
+    };
+
+    saveData(data);
+}
+
+// 🏆 Add win
 function addWin(userId) {
-    const data = getData();
-    ensureUser(data, userId);
+    const data = loadData();
 
-    data[userId].stats.wins += 1;
+    if (!data[userId]) {
+        data[userId] = {
+            balance: 0,
+            wins: 0,
+            losses: 0
+        };
+    }
+
+    data[userId].wins += 1;
+
     saveData(data);
 }
 
+// 💀 Add loss
 function addLoss(userId) {
-    const data = getData();
-    ensureUser(data, userId);
+    const data = loadData();
 
-    data[userId].stats.losses += 1;
+    if (!data[userId]) {
+        data[userId] = {
+            balance: 0,
+            wins: 0,
+            losses: 0
+        };
+    }
+
+    data[userId].losses += 1;
+
     saveData(data);
 }
 
+// 📊 Get stats
 function getStats(userId) {
-    const data = getData();
-    return data[userId]?.stats || { wins: 0, losses: 0 };
-}
+    const data = loadData();
 
-// 🏆 ALL USERS (for leaderboard)
-function getAllUsers() {
-    return getData();
-}
+    if (!data[userId]) {
+        return {
+            balance: 0,
+            wins: 0,
+            losses: 0
+        };
+    }
 
-// 🔗 WALLET
-function setWallet(userId, address) {
-    const data = getData();
-    ensureUser(data, userId);
-
-    data[userId].wallet = address;
-    saveData(data);
-}
-
-function getWallet(userId) {
-    const data = getData();
-    return data[userId]?.wallet || null;
+    return data[userId];
 }
 
 module.exports = {
     getBalance,
     addBalance,
     removeBalance,
+    resetBalance,
     addWin,
     addLoss,
-    getStats,
-    getAllUsers,
-    setWallet,
-    getWallet
+    getStats
 };
