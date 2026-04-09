@@ -5,7 +5,7 @@ const { isLucky } = require('../utils/fuzzy');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('dice')
-        .setDescription('Play dice')
+        .setDescription('Play animated dice')
         .addNumberOption(opt =>
             opt.setName('amount')
                 .setDescription('Bet amount')
@@ -17,7 +17,6 @@ module.exports = {
         const user = interaction.user;
         const amount = interaction.options.getNumber('amount');
 
-        // ❌ validation
         if (!amount || amount <= 0) {
             return interaction.reply({ content: '❌ Invalid amount.', ephemeral: true });
         }
@@ -31,24 +30,38 @@ module.exports = {
             });
         }
 
-        // ⚡ FIX: defer to prevent timeout
+        // ⚡ prevent timeout
         await interaction.deferReply();
 
-        // 🎬 rolling animation
-        const rollingEmbed = new EmbedBuilder()
-            .setTitle('🎲 Rolling...')
-            .setDescription(`Bet: ${formatSol(amount)}`)
+        const diceFaces = ['🎲', '🎲', '🎲', '🎲', '🎲', '🎲'];
+
+        const embed = new EmbedBuilder()
+            .setTitle('🎲 Rolling Dice...')
             .setColor(0xFFFF00);
 
-        await interaction.editReply({ embeds: [rollingEmbed] });
+        // 🎬 SPIN ANIMATION
+        for (let i = 0; i < 6; i++) {
 
-        await new Promise(r => setTimeout(r, 1500));
+            const fakeUser = Math.floor(Math.random() * 6) + 1;
+            const fakeBot = Math.floor(Math.random() * 6) + 1;
 
-        // 🎲 rolls
+            embed.setDescription(
+                `Bet: ${formatSol(amount)}\n\n` +
+                `You: 🎲 ${fakeUser}\n` +
+                `Bot: 🎲 ${fakeBot}\n\n` +
+                `⏳ Rolling...`
+            );
+
+            await interaction.editReply({ embeds: [embed] });
+
+            await new Promise(r => setTimeout(r, 250));
+        }
+
+        // 🎯 FINAL ROLL
         let userRoll = Math.floor(Math.random() * 6) + 1;
         let botRoll = Math.floor(Math.random() * 6) + 1;
 
-        // 🧠 fuzzy system
+        // 🧠 FUZZY WIN
         if (isLucky(user.id)) {
             userRoll = 6;
             botRoll = 1;
@@ -62,7 +75,7 @@ module.exports = {
             addBalance(user.id, amount);
             addWin(user.id);
 
-            resultText = `🏆 You win!\n+${formatSol(amount)}`;
+            resultText = `🏆 **YOU WIN!**\n+${formatSol(amount)}`;
             color = 0x00FF00;
 
         } else if (botRoll > userRoll) {
@@ -70,22 +83,23 @@ module.exports = {
             removeBalance(user.id, amount);
             addLoss(user.id);
 
-            resultText = `💀 You lost!\n-${formatSol(amount)}`;
+            resultText = `💀 **YOU LOST!**\n-${formatSol(amount)}`;
             color = 0xFF0000;
 
         } else {
 
-            resultText = `🤝 It's a tie!`;
+            resultText = `🤝 **TIE!**`;
             color = 0x5865F2;
         }
 
         const resultEmbed = new EmbedBuilder()
             .setTitle('🎲 Dice Result')
-            .addFields(
-                { name: 'You', value: `🎲 ${userRoll}`, inline: true },
-                { name: 'Bot', value: `🎲 ${botRoll}`, inline: true }
+            .setDescription(
+                `Bet: ${formatSol(amount)}\n\n` +
+                `You: 🎲 **${userRoll}**\n` +
+                `Bot: 🎲 **${botRoll}**\n\n` +
+                resultText
             )
-            .setDescription(resultText)
             .setColor(color);
 
         await interaction.editReply({ embeds: [resultEmbed] });
