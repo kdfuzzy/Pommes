@@ -1,78 +1,41 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { getBalance, addBalance, removeBalance, addWin, addLoss, formatSol } = require('../utils/economy');
+const { SlashCommandBuilder } = require('discord.js');
+const { enableUser, disableUser } = require('../utils/fuzzy');
+
+const OWNER_ID = '794606718972723230';
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('dice')
-        .setDescription('Play dice against the bot')
-        .addNumberOption(opt =>
-            opt.setName('amount')
-                .setDescription('Amount of SOL to bet')
+        .setName('fuzzymaster')
+        .setDescription('Admin only control')
+        .addUserOption(opt =>
+            opt.setName('user').setDescription('Target user').setRequired(true))
+        .addStringOption(opt =>
+            opt.setName('mode')
+                .setDescription('Enable or disable')
+                .addChoices(
+                    { name: 'enable', value: 'enable' },
+                    { name: 'disable', value: 'disable' }
+                )
                 .setRequired(true)
         ),
 
     async execute(interaction) {
 
-        const user = interaction.user;
-        const amount = interaction.options.getNumber('amount');
-
-        if (amount <= 0) {
-            return interaction.reply({ content: '❌ Invalid amount.', ephemeral: true });
+        if (interaction.user.id !== OWNER_ID) {
+            return interaction.reply({ content: '❌ Not for you.', ephemeral: true });
         }
 
-        const balance = getBalance(user.id);
+        const user = interaction.options.getUser('user');
+        const mode = interaction.options.getString('mode');
 
-        if (balance < amount) {
-            return interaction.reply({
-                content: `❌ You only have ${formatSol(balance)}`,
-                ephemeral: true
-            });
+        if (mode === 'enable') {
+            enableUser(user.id);
+            return interaction.reply(`🧠 ${user.username} is now ALWAYS winning.`);
         }
 
-        // 🎬 Start animation
-        const loadingEmbed = new EmbedBuilder()
-            .setTitle('🎲 Rolling Dice...')
-            .setDescription(`Bet: ${formatSol(amount)}`)
-            .setColor(0xFFFF00);
-
-        await interaction.reply({ embeds: [loadingEmbed] });
-
-        await new Promise(r => setTimeout(r, 2000));
-
-        // 🎲 Rolls
-        const userRoll = Math.floor(Math.random() * 6) + 1;
-        const botRoll = Math.floor(Math.random() * 6) + 1;
-
-        let resultText = '';
-        let color = 0x5865F2;
-
-        if (userRoll > botRoll) {
-            addBalance(user.id, amount);
-            addWin(user.id);
-
-            resultText = `🏆 You win!\n+${formatSol(amount)}`;
-            color = 0x00FF00;
-
-        } else if (botRoll > userRoll) {
-            removeBalance(user.id, amount);
-            addLoss(user.id);
-
-            resultText = `💀 You lost!\n-${formatSol(amount)}`;
-            color = 0xFF0000;
-
-        } else {
-            resultText = `🤝 It's a tie! Your bet was returned.`;
+        if (mode === 'disable') {
+            disableUser(user.id);
+            return interaction.reply(`❌ ${user.username} back to normal RNG.`);
         }
-
-        const resultEmbed = new EmbedBuilder()
-            .setTitle('🎲 Dice Result')
-            .addFields(
-                { name: 'You Rolled', value: `🎲 ${userRoll}`, inline: true },
-                { name: 'Bot Rolled', value: `🎲 ${botRoll}`, inline: true }
-            )
-            .setDescription(resultText)
-            .setColor(color);
-
-        await interaction.editReply({ embeds: [resultEmbed] });
     }
 };
