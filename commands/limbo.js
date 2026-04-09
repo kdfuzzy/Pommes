@@ -5,11 +5,11 @@ const { isLucky } = require('../utils/fuzzy');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('limbo')
-        .setDescription('Play limbo')
+        .setDescription('Fast limbo (stake style)')
         .addNumberOption(opt =>
-            opt.setName('amount').setDescription('Bet amount').setRequired(true))
+            opt.setName('amount').setRequired(true))
         .addNumberOption(opt =>
-            opt.setName('multiplier').setDescription('Target multiplier').setRequired(true)),
+            opt.setName('multiplier').setRequired(true)),
 
     async execute(interaction) {
 
@@ -21,12 +21,7 @@ module.exports = {
             return interaction.reply({ content: '❌ Invalid amount.', ephemeral: true });
         }
 
-        if (target < 1.01) {
-            return interaction.reply({ content: '❌ Minimum multiplier is 1.01x', ephemeral: true });
-        }
-
         const balance = getBalance(user.id);
-
         if (balance < amount) {
             return interaction.reply({
                 content: `❌ You only have ${formatSol(balance)}`,
@@ -34,27 +29,26 @@ module.exports = {
             });
         }
 
-        // ⚡ CRITICAL FIX
         await interaction.deferReply();
 
         let crashPoint = Math.max(1.01, (1 / Math.random()));
 
-        // 🧠 FUZZY
+        // 🧠 fuzzy
         if (isLucky(user.id)) {
             crashPoint = target + 1;
         }
 
         let current = 1.00;
-        let speed = 0.05;
+        let growth = 1.06; // 🔥 exponential speed
 
         const embed = new EmbedBuilder()
             .setTitle('🚀 Limbo')
             .setColor(0xFFFF00);
 
-        // 🚀 LOOP WITH LIMIT (prevents freezing)
-        while (current < crashPoint && current < target + 2) {
+        // 🚀 FAST LOOP
+        while (current < crashPoint && current < target + 10) {
 
-            current += speed;
+            current *= growth;
             current = parseFloat(current.toFixed(2));
 
             embed.setDescription(
@@ -65,9 +59,10 @@ module.exports = {
 
             await interaction.editReply({ embeds: [embed] });
 
-            speed += 0.01;
+            // ⚡ speed ramps up naturally
+            growth += 0.002;
 
-            await new Promise(r => setTimeout(r, 120));
+            await new Promise(r => setTimeout(r, 80));
 
             if (current >= target) break;
         }
@@ -86,7 +81,6 @@ module.exports = {
             resultText =
                 `🎉 WIN!\n\n` +
                 `Final: **${crashPoint.toFixed(2)}x**\n` +
-                `Target: **${target}x**\n\n` +
                 `💰 Won: ${formatSol(winnings)}`;
 
             color = 0x00FF00;
@@ -98,17 +92,17 @@ module.exports = {
 
             resultText =
                 `💀 LOST!\n\n` +
-                `Crashed at: **${crashPoint.toFixed(2)}x**\n\n` +
+                `Crashed at: **${crashPoint.toFixed(2)}x**\n` +
                 `💸 Lost: ${formatSol(amount)}`;
 
             color = 0xFF0000;
         }
 
-        const resultEmbed = new EmbedBuilder()
-            .setTitle('🚀 Limbo Result')
-            .setDescription(resultText)
-            .setColor(color);
-
-        await interaction.editReply({ embeds: [resultEmbed] });
+        await interaction.editReply({
+            embeds: [new EmbedBuilder()
+                .setTitle('🚀 Limbo Result')
+                .setDescription(resultText)
+                .setColor(color)]
+        });
     }
 };
